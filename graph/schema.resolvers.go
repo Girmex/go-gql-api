@@ -6,21 +6,29 @@ package graph
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Girmex/go-gql-api/graph/model"
+	"github.com/Girmex/go-gql-api/middleware"
+	"github.com/Girmex/go-gql-api/utils/auth"
 	"github.com/google/uuid"
 )
 
 // CreateUser is the resolver for the createUser field.
 func (r *mutationResolver) CreateUser(ctx context.Context, input model.NewUserInput) (*model.User, error) {
-	user := &model.User{
-		ID:    uuid.NewString(),
-		Name:  input.Name,
-		Email: input.Email,
+	hashedPassword, err := auth.HashPassword(input.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// Save to DB
+	user := &model.User{
+		ID:       uuid.NewString(),
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: hashedPassword,
+	}
+
 	if err := r.DB.Create(user).Error; err != nil {
 		return nil, err
 	}
@@ -28,13 +36,39 @@ func (r *mutationResolver) CreateUser(ctx context.Context, input model.NewUserIn
 	return user, nil
 }
 
+
+func (r *mutationResolver) Login(ctx context.Context, input model.LoginInput) (*model.AuthPayload, error) {
+	var user model.User
+	if err := r.DB.Where("email = ?", input.Email).First(&user).Error; err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	if !auth.CheckPasswordHash(input.Password, user.Password) {
+		return nil, errors.New("invalid credentials")
+	}
+
+	token, err := auth.GenerateToken(user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token: %w", err)
+	}
+
+	return &model.AuthPayload{
+		Token: token,
+		User:  &user,
+	}, nil
+}
+
 // CreatePost is the resolver for the createPost field.
 func (r *mutationResolver) CreatePost(ctx context.Context, input model.NewPostInput) (*model.Post, error) {
+	userID, ok := middleware.GetUserID(ctx)
+	if !ok {
+		return nil, fmt.Errorf("user ID not found in context")
+	}
 	post := &model.Post{
 		ID:       uuid.NewString(),
 		Title:    input.Title,
 		Content:  input.Content,
-		AuthorID: input.AuthorID,
+		AuthorID: userID,
 	}
 
 	// Save the post
@@ -53,7 +87,7 @@ func (r *mutationResolver) CreatePost(ctx context.Context, input model.NewPostIn
 // CreateComment is the resolver for the createComment field.
 func (r *mutationResolver) CreateComment(ctx context.Context, input model.NewCommentInput) (*model.Comment, error) {
 	comment := &model.Comment{
-		ID:      uuid.NewString(),  // import "github.com/google/uuid"
+		ID:      uuid.NewString(), // import "github.com/google/uuid"
 		Content: input.Content,
 		UserID:  input.AuthorID,
 		PostID:  input.PostID,
@@ -71,6 +105,7 @@ func (r *mutationResolver) CreateComment(ctx context.Context, input model.NewCom
 	return comment, nil
 }
 
+// Login is the resolver for the login field.
 
 // Users is the resolver for the users field.
 func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
@@ -84,7 +119,12 @@ func (r *queryResolver) Users(ctx context.Context) ([]*model.User, error) {
 // Posts is the resolver for the posts field.
 func (r *queryResolver) Posts(ctx context.Context) ([]*model.Post, error) {
 	var posts []*model.Post
-	err := r.DB.Preload("Author").Preload("Comments").Find(&posts).Error
+	err := r.DB.
+		Preload("Author").
+		Preload("Comments.User"). // preload User inside Comments
+		Preload("Comments.Post"). // optional, if you want to preload Post in Comments too
+		Find(&posts).Error
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch posts: %w", err)
 	}
@@ -99,7 +139,6 @@ func (r *queryResolver) Comments(ctx context.Context) ([]*model.Comment, error) 
 	}
 	return comments, nil
 }
-
 
 // Mutation returns MutationResolver implementation.
 func (r *Resolver) Mutation() MutationResolver { return &mutationResolver{r} }

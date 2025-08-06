@@ -1,4 +1,3 @@
-
 type User {
   id: ID!
   name: String!
@@ -17,14 +16,14 @@ type Post {
 type Comment {
   id: ID!
   content: String!
-  user: User!       # <-- This must be defined in your schema
+  user: User!
   post: Post!
 }
-
 
 input NewUserInput {
   name: String!
   email: String!
+  password:String!
 }
 
 input NewPostInput {
@@ -39,6 +38,16 @@ input NewCommentInput {
   authorID: ID!
 }
 
+input LoginInput {
+  email: String!
+  password:String!
+}
+
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
 type Query {
   users: [User!]!
   posts: [Post!]!
@@ -49,4 +58,5 @@ type Mutation {
   createUser(input: NewUserInput!): User!
   createPost(input: NewPostInput!): Post!
   createComment(input: NewCommentInput!): Comment!
+  login(input: LoginInput!): AuthPayload!
 }

@@ -4,7 +4,9 @@ go 1.24.4
 
 require (
 	github.com/99designs/gqlgen v0.17.78
+	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/vektah/gqlparser/v2 v2.5.30
+	golang.org/x/crypto v0.40.0
 	gorm.io/gorm v1.25.10
 )
 
@@ -37,7 +39,6 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	golang.org/x/crypto v0.40.0 // indirect
 	golang.org/x/net v0.42.0 // indirect
 	golang.org/x/sys v0.34.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
